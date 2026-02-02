@@ -22,16 +22,13 @@ const MAX_WIDTH = 36;
 const MAX_HEIGHT = 22;
 const CELL_WIDTH = 2;
 const CELL_HEIGHT = 1;
-const PANEL_WIDTH = 28;
-const PANEL_HEIGHT = 12;
+const HEADER_HEIGHT = 3;
 const CONTROLS_HEIGHT = 3;
 const APP_GAP = 0;
-const GAP = 2;
 const ROOT_PADDING = 1;
-const LAYOUT_BREAKPOINT = 100;
 
 const COLORS = {
-  empty: "#121212",
+  empty: "transparent",
   food: "#cc3b3b",
   snake: "#1e8f54",
   snakeHead: "#34d17c",
@@ -48,12 +45,11 @@ const renderer = await createCliRenderer({
   autoFocus: true,
 });
 
-const layoutMode = getLayoutMode(renderer.terminalWidth);
 const boardSize = getBoardSize(
   renderer.terminalWidth,
   renderer.terminalHeight,
-  layoutMode,
 );
+let currentSize = boardSize;
 
 let state = createInitialState({
   width: boardSize.width,
@@ -80,36 +76,24 @@ const app = new BoxRenderable(renderer, {
 const gameGroup = new BoxRenderable(renderer, {
   id: "group",
   flexDirection: "column",
-  gap: APP_GAP,
+  gap: 0,
   alignItems: "center",
-});
-
-const mainArea = new BoxRenderable(renderer, {
-  id: "main",
-  width: "auto",
-  flexDirection: layoutMode,
-  justifyContent: "center",
-  alignItems: "center",
-  gap: GAP,
 });
 
 let boardBox = createBoardBox(boardSize);
-const panelBox = createPanelBox(boardSize, layoutMode);
-
-const titleText = new TextRenderable(renderer, {
-  content: "Snake",
+const headerBar = new BoxRenderable(renderer, {
+  width: boardSize.pixelWidth,
+  height: HEADER_HEIGHT,
+  justifyContent: "center",
+  alignItems: "center",
 });
 
-const scoreText = new TextRenderable(renderer, {
-  content: "",
-});
-
-const statusText = new TextRenderable(renderer, {
-  content: "",
+const headerText = new TextRenderable(renderer, {
+  content: renderHeader(0),
 });
 
 const controlsBar = new BoxRenderable(renderer, {
-  width: getGroupWidth(layoutMode, boardSize),
+  width: boardSize.pixelWidth,
   height: CONTROLS_HEIGHT,
   justifyContent: "center",
   alignItems: "center",
@@ -156,17 +140,14 @@ const dialogText = new TextRenderable(renderer, {
   content: "",
 });
 
-panelBox.add(titleText);
-panelBox.add(scoreText);
-panelBox.add(statusText);
 dialogBox.add(dialogText);
 dialogOverlay.add(dialogBox);
 
-mainArea.add(boardBox);
-mainArea.add(panelBox);
+headerBar.add(headerText);
 controlsBar.add(controlsText);
 
-gameGroup.add(mainArea);
+gameGroup.add(headerBar);
+gameGroup.add(boardBox);
 gameGroup.add(controlsBar);
 
 app.add(gameGroup);
@@ -196,8 +177,8 @@ renderer.keyInput.on("keypress", (key) => {
 
   if (key.name === "r") {
     state = createInitialState({
-      width: boardSize.width,
-      height: boardSize.height,
+      width: currentSize.width,
+      height: currentSize.height,
     });
     hasStarted = false;
     state = {
@@ -251,29 +232,18 @@ function shutdown() {
   renderer.destroy();
 }
 
-function getLayoutMode(terminalWidth: number): "row" | "column" {
-  return terminalWidth < LAYOUT_BREAKPOINT ? "column" : "row";
-}
-
 function getBoardSize(
   terminalWidth: number,
   terminalHeight: number,
-  layout: "row" | "column",
 ) {
-  const availableWidth =
-    layout === "row"
-      ? terminalWidth - ROOT_PADDING * 2 - PANEL_WIDTH - GAP - 2
-      : terminalWidth - ROOT_PADDING * 2 - 2;
+  const availableWidth = terminalWidth - ROOT_PADDING * 2 - 2;
   const availableHeight =
-    layout === "row"
-      ? terminalHeight - ROOT_PADDING * 2 - CONTROLS_HEIGHT - APP_GAP - 2
-      : terminalHeight -
-        ROOT_PADDING * 2 -
-        PANEL_HEIGHT -
-        GAP -
-        CONTROLS_HEIGHT -
-        APP_GAP -
-        2;
+    terminalHeight -
+    ROOT_PADDING * 2 -
+    HEADER_HEIGHT -
+    CONTROLS_HEIGHT -
+    APP_GAP * 2 -
+    2;
 
   const width = clamp(
     Math.floor(availableWidth / CELL_WIDTH),
@@ -294,22 +264,6 @@ function getBoardSize(
     height,
     pixelWidth,
     pixelHeight,
-    panelHeight:
-      layout === "row"
-        ? pixelHeight
-        : Math.max(
-            6,
-            Math.min(
-              PANEL_HEIGHT,
-              terminalHeight -
-                ROOT_PADDING * 2 -
-                CONTROLS_HEIGHT -
-                APP_GAP -
-                pixelHeight -
-                GAP -
-                2,
-            ),
-          ),
   };
 }
 
@@ -329,40 +283,20 @@ function createBoardBox(size: ReturnType<typeof getBoardSize>) {
   });
 }
 
-function createPanelBox(
-  size: ReturnType<typeof getBoardSize>,
-  layout: "row" | "column",
-) {
-  return new BoxRenderable(renderer, {
-    id: "panel",
-    width: layout === "row" ? PANEL_WIDTH : size.pixelWidth,
-    height: layout === "row" ? size.panelHeight : size.panelHeight,
-    border: true,
-    borderColor: COLORS.border,
-    flexDirection: "column",
-    padding: 1,
-    gap: 1,
-  });
-}
-
 function rebuildLayout() {
-  const nextLayout = getLayoutMode(renderer.terminalWidth);
   const nextSize = getBoardSize(
     renderer.terminalWidth,
     renderer.terminalHeight,
-    nextLayout,
   );
+  currentSize = nextSize;
 
-  mainArea.flexDirection = nextLayout;
-  controlsBar.width = getGroupWidth(nextLayout, nextSize);
+  headerBar.width = nextSize.pixelWidth;
+  controlsBar.width = nextSize.pixelWidth;
 
-  mainArea.remove("board");
+  gameGroup.remove("board");
   boardBox.destroyRecursively();
   boardBox = createBoardBox(nextSize);
-  mainArea.insertBefore(boardBox, panelBox);
-
-  panelBox.width = nextLayout === "row" ? PANEL_WIDTH : nextSize.pixelWidth;
-  panelBox.height = nextLayout === "row" ? nextSize.panelHeight : nextSize.panelHeight;
+  gameGroup.insertBefore(boardBox, controlsBar);
 
   cells = createGrid(boardBox, nextSize.width, nextSize.height);
   state = createInitialState({
@@ -377,6 +311,12 @@ function rebuildLayout() {
   updateUi(state);
 }
 
+function renderHeader(score: number) {
+  return t`${fg(COLORS.controlsHint)("score")} ${fg(COLORS.controlsKey)(
+    String(score),
+  )}`;
+}
+
 function renderControls() {
   return t`${fg(COLORS.controlsKey)("Arrows/WASD")} ${fg(
     COLORS.controlsHint,
@@ -387,15 +327,6 @@ function renderControls() {
   )("restart")}   ${fg(COLORS.controlsKey)("Q")} ${fg(
     COLORS.controlsHint,
   )("quit")}`;
-}
-
-function getGroupWidth(
-  layout: "row" | "column",
-  size: ReturnType<typeof getBoardSize>,
-) {
-  return layout === "row"
-    ? size.pixelWidth + PANEL_WIDTH + GAP
-    : Math.max(size.pixelWidth, PANEL_WIDTH);
 }
 
 function createGrid(
@@ -444,18 +375,7 @@ function updateUi(nextState: GameState) {
 }
 
 function updatePanel(nextState: GameState) {
-  scoreText.content = `Score: ${nextState.score}\nLength: ${nextState.snake.length}`;
-
-  let statusLine = "";
-  if (nextState.gameOver) {
-    statusLine = nextState.won ? "You filled the board!" : "Game Over";
-  } else if (!hasStarted) {
-    statusLine = "Ready";
-  } else if (nextState.paused) {
-    statusLine = "Paused";
-  }
-
-  statusText.content = statusLine ? `\n${statusLine}\n` : "";
+  headerText.content = renderHeader(nextState.score);
   boardBox.borderColor = nextState.gameOver ? COLORS.borderAlert : COLORS.border;
   const showDialog = nextState.gameOver || !hasStarted;
   backdrop.visible = showDialog;
