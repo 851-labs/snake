@@ -87,6 +87,13 @@ export function tick(state: GameState, rng: Rng = Math.random): GameState {
 
   const direction = state.nextDirection;
   const head = state.snake[0];
+  if (!head) {
+    return {
+      ...state,
+      gameOver: true,
+      paused: false,
+    };
+  }
   const nextHead = move(head, direction);
   const willEat = state.food !== null && pointsEqual(nextHead, state.food);
   const hitsWall = isOutOfBounds(nextHead, state.width, state.height);
@@ -150,7 +157,8 @@ export function placeFood(
   }
 
   const index = Math.floor(rng() * empty.length);
-  return empty[Math.max(0, Math.min(index, empty.length - 1))];
+  const choice = empty[index] ?? empty[0]!;
+  return choice;
 }
 
 function move(point: Point, direction: Direction): Point {

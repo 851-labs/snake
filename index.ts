@@ -184,12 +184,14 @@ function renderBoard(state: GameState): string {
     grid.push(row);
   }
 
-  if (food) {
-    grid[food.y][food.x] = "*";
+  if (food && isInBounds(food, width, height)) {
+    grid[food.y]![food.x] = "*";
   }
 
   snake.forEach((segment, index) => {
-    grid[segment.y][segment.x] = index === 0 ? "@" : "o";
+    if (isInBounds(segment, width, height)) {
+      grid[segment.y]![segment.x] = index === 0 ? "@" : "o";
+    }
   });
 
   const top = "+" + "-".repeat(width) + "+";
@@ -197,4 +199,8 @@ function renderBoard(state: GameState): string {
   const rows = grid.map((row) => `|${row.join("")}|`);
 
   return [top, ...rows, bottom].join("\n");
+}
+
+function isInBounds(point: { x: number; y: number }, width: number, height: number) {
+  return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
 }
