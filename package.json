@@ -5,14 +5,14 @@
   "private": true,
   "scripts": {
     "start": "bun run index.ts",
+    "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
   "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
+    "@types/bun": "latest",
     "typescript": "^5"
   },
+  "peerDependencies": {},
   "dependencies": {
     "@opentui/core": "^0.1.77"
   }
