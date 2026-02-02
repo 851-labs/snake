@@ -13,7 +13,7 @@ import {
   type Direction,
   type GameState,
   type Point,
-} from "./src/game";
+} from "./game";
 
 const TICK_MS = 140;
 const MIN_WIDTH = 12;
@@ -481,7 +481,7 @@ function updateGrid(nextState: GameState) {
     paintCell(nextState.food, COLORS.food, " ");
   }
 
-  nextState.snake.forEach((segment, index) => {
+  nextState.snake.forEach((segment: Point, index: number) => {
     paintCell(
       segment,
       index === 0 ? COLORS.snakeHead : COLORS.snake,
