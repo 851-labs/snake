@@ -1,4 +1,4 @@
-import { createCliRenderer, TextRenderable } from "@opentui/core";
+import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core";
 import {
   createInitialState,
   queueDirection,
@@ -6,13 +6,29 @@ import {
   togglePause,
   type Direction,
   type GameState,
+  type Point,
 } from "./src/game";
 
 const TICK_MS = 140;
-const MIN_WIDTH = 14;
-const MIN_HEIGHT = 10;
+const MIN_WIDTH = 12;
+const MIN_HEIGHT = 8;
 const MAX_WIDTH = 36;
-const MAX_HEIGHT = 20;
+const MAX_HEIGHT = 22;
+const CELL_WIDTH = 2;
+const CELL_HEIGHT = 1;
+const PANEL_WIDTH = 28;
+const GAP = 2;
+const ROOT_PADDING = 1;
+
+const COLORS = {
+  empty: "#121212",
+  food: "#cc3b3b",
+  snake: "#1e8f54",
+  snakeHead: "#34d17c",
+  panel: "#0a0a0a",
+  border: "#4a4a4a",
+  borderAlert: "#d17834",
+};
 
 const renderer = await createCliRenderer({
   exitOnCtrlC: true,
@@ -30,19 +46,69 @@ let state = createInitialState({
   height: boardSize.height,
 });
 
-const screen = new TextRenderable(renderer, {
+const root = new BoxRenderable(renderer, {
   width: "100%",
   height: "100%",
-  content: render(state),
+  flexDirection: "row",
+  padding: ROOT_PADDING,
+  gap: GAP,
+  backgroundColor: COLORS.panel,
+  shouldFill: true,
 });
 
-renderer.root.add(screen);
+const boardBox = new BoxRenderable(renderer, {
+  width: boardSize.pixelWidth,
+  height: boardSize.pixelHeight,
+  border: true,
+  borderColor: COLORS.border,
+  flexDirection: "row",
+  flexWrap: "wrap",
+});
+
+const panelBox = new BoxRenderable(renderer, {
+  width: PANEL_WIDTH,
+  height: boardSize.pixelHeight,
+  border: true,
+  borderColor: COLORS.border,
+  flexDirection: "column",
+  padding: 1,
+  gap: 1,
+});
+
+const titleText = new TextRenderable(renderer, {
+  content: "Snake",
+});
+
+const scoreText = new TextRenderable(renderer, {
+  content: "",
+});
+
+const statusText = new TextRenderable(renderer, {
+  content: "",
+});
+
+const helpText = new TextRenderable(renderer, {
+  content:
+    "Controls\n\nArrows / WASD  Move\nP or Space    Pause\nR             Restart\nQ             Quit",
+});
+
+panelBox.add(titleText);
+panelBox.add(scoreText);
+panelBox.add(statusText);
+panelBox.add(helpText);
+
+root.add(boardBox);
+root.add(panelBox);
+renderer.root.add(root);
+
+const cells = createGrid(boardBox, boardSize.width, boardSize.height);
+updateUi(state);
+
 renderer.start();
 
 const interval = setInterval(() => {
   state = tick(state);
-  screen.content = render(state);
-  renderer.requestRender();
+  updateUi(state);
 }, TICK_MS);
 
 renderer.keyInput.on("keypress", (key) => {
@@ -60,15 +126,13 @@ renderer.keyInput.on("keypress", (key) => {
       width: boardSize.width,
       height: boardSize.height,
     });
-    screen.content = render(state);
-    renderer.requestRender();
+    updateUi(state);
     return;
   }
 
   if (key.name === "space" || key.name === "p") {
     state = togglePause(state);
-    screen.content = render(state);
-    renderer.requestRender();
+    updateUi(state);
     return;
   }
 
@@ -92,13 +156,122 @@ function shutdown() {
 }
 
 function getBoardSize(terminalWidth: number, terminalHeight: number) {
-  const width = clamp(terminalWidth - 4, MIN_WIDTH, MAX_WIDTH);
-  const height = clamp(terminalHeight - 6, MIN_HEIGHT, MAX_HEIGHT);
-  return { width, height };
+  const availableWidth =
+    terminalWidth - ROOT_PADDING * 2 - PANEL_WIDTH - GAP - 2;
+  const availableHeight = terminalHeight - ROOT_PADDING * 2 - 2;
+
+  const width = clamp(
+    Math.floor(availableWidth / CELL_WIDTH),
+    MIN_WIDTH,
+    MAX_WIDTH,
+  );
+  const height = clamp(
+    Math.floor(availableHeight / CELL_HEIGHT),
+    MIN_HEIGHT,
+    MAX_HEIGHT,
+  );
+
+  return {
+    width,
+    height,
+    pixelWidth: width * CELL_WIDTH + 2,
+    pixelHeight: height * CELL_HEIGHT + 2,
+  };
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
+}
+
+function createGrid(
+  container: BoxRenderable,
+  width: number,
+  height: number,
+) {
+  const grid: {
+    box: BoxRenderable;
+    text: TextRenderable;
+  }[][] = [];
+
+  for (let y = 0; y < height; y += 1) {
+    const row: { box: BoxRenderable; text: TextRenderable }[] = [];
+    for (let x = 0; x < width; x += 1) {
+      const cellBox = new BoxRenderable(renderer, {
+        width: CELL_WIDTH,
+        height: CELL_HEIGHT,
+        backgroundColor: COLORS.empty,
+        shouldFill: true,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+
+      const cellText = new TextRenderable(renderer, {
+        content: " ",
+        width: "100%",
+        height: "100%",
+      });
+
+      cellBox.add(cellText);
+      container.add(cellBox);
+      row.push({ box: cellBox, text: cellText });
+    }
+    grid.push(row);
+  }
+
+  return grid;
+}
+
+function updateUi(nextState: GameState) {
+  updatePanel(nextState);
+  updateGrid(nextState);
+  renderer.requestRender();
+}
+
+function updatePanel(nextState: GameState) {
+  scoreText.content = `Score: ${nextState.score}\nLength: ${nextState.snake.length}`;
+
+  let statusLine = "";
+  if (nextState.gameOver) {
+    statusLine = nextState.won ? "You filled the board!" : "Game Over";
+  } else if (nextState.paused) {
+    statusLine = "Paused";
+  }
+
+  statusText.content = statusLine ? `\n${statusLine}\n` : "";
+  boardBox.borderColor = nextState.gameOver ? COLORS.borderAlert : COLORS.border;
+}
+
+function updateGrid(nextState: GameState) {
+  for (let y = 0; y < nextState.height; y += 1) {
+    for (let x = 0; x < nextState.width; x += 1) {
+      const cell = cells[y]![x]!;
+      cell.box.backgroundColor = COLORS.empty;
+      cell.text.content = " ";
+    }
+  }
+
+  if (nextState.food) {
+    paintCell(nextState.food, COLORS.food, " ");
+  }
+
+  nextState.snake.forEach((segment, index) => {
+    paintCell(
+      segment,
+      index === 0 ? COLORS.snakeHead : COLORS.snake,
+      " ",
+    );
+  });
+}
+
+function paintCell(point: Point, color: string, symbol: string) {
+  const row = cells[point.y];
+  const cell = row ? row[point.x] : undefined;
+  if (!cell) {
+    return;
+  }
+  cell.box.backgroundColor = color;
+  cell.text.content = symbol;
 }
 
 function mapKeyToDirection(name: string, sequence: string): Direction | null {
@@ -141,66 +314,4 @@ function sequenceToArrow(sequence: string): Direction | null {
     default:
       return null;
   }
-}
-
-function render(state: GameState): string {
-  const lines: string[] = [];
-  const status = state.gameOver
-    ? state.won
-      ? "You filled the board."
-      : "Game Over."
-    : state.paused
-      ? "Paused."
-      : "";
-
-  lines.push(`Snake  Score: ${state.score}  Length: ${state.snake.length}`);
-  if (status) {
-    lines.push(status);
-  } else {
-    lines.push(" ");
-  }
-
-  lines.push(renderBoard(state));
-  lines.push(" ");
-  lines.push(
-    "Controls: Arrow keys/WASD move, P or Space pause, R restart, Q quit",
-  );
-  if (state.gameOver) {
-    lines.push("Press R to restart.");
-  }
-
-  return lines.join("\n");
-}
-
-function renderBoard(state: GameState): string {
-  const { width, height, snake, food } = state;
-  const grid: string[][] = [];
-
-  for (let y = 0; y < height; y += 1) {
-    const row: string[] = [];
-    for (let x = 0; x < width; x += 1) {
-      row.push(" ");
-    }
-    grid.push(row);
-  }
-
-  if (food && isInBounds(food, width, height)) {
-    grid[food.y]![food.x] = "*";
-  }
-
-  snake.forEach((segment, index) => {
-    if (isInBounds(segment, width, height)) {
-      grid[segment.y]![segment.x] = index === 0 ? "@" : "o";
-    }
-  });
-
-  const top = "+" + "-".repeat(width) + "+";
-  const bottom = top;
-  const rows = grid.map((row) => `|${row.join("")}|`);
-
-  return [top, ...rows, bottom].join("\n");
-}
-
-function isInBounds(point: { x: number; y: number }, width: number, height: number) {
-  return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
 }
