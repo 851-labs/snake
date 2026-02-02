@@ -45,6 +45,11 @@ let state = createInitialState({
   width: boardSize.width,
   height: boardSize.height,
 });
+let hasStarted = false;
+state = {
+  ...state,
+  paused: true,
+};
 
 const root = new BoxRenderable(renderer, {
   width: "100%",
@@ -92,13 +97,54 @@ const helpText = new TextRenderable(renderer, {
     "Controls\n\nArrows / WASD  Move\nP or Space    Pause\nR             Restart\nQ             Quit",
 });
 
+const backdrop = new BoxRenderable(renderer, {
+  width: "100%",
+  height: "100%",
+  position: "absolute",
+  top: 0,
+  left: 0,
+  backgroundColor: "#000000",
+  opacity: 0.55,
+  zIndex: 8,
+  visible: false,
+});
+
+const dialogOverlay = new BoxRenderable(renderer, {
+  width: "100%",
+  height: "100%",
+  position: "absolute",
+  top: 0,
+  left: 0,
+  justifyContent: "center",
+  alignItems: "center",
+  zIndex: 9,
+  visible: false,
+});
+
+const dialogBox = new BoxRenderable(renderer, {
+  width: 36,
+  height: 7,
+  border: true,
+  borderColor: COLORS.borderAlert,
+  backgroundColor: COLORS.panel,
+  padding: 1,
+});
+
+const dialogText = new TextRenderable(renderer, {
+  content: "",
+});
+
 panelBox.add(titleText);
 panelBox.add(scoreText);
 panelBox.add(statusText);
 panelBox.add(helpText);
+dialogBox.add(dialogText);
+dialogOverlay.add(dialogBox);
 
 root.add(boardBox);
 root.add(panelBox);
+root.add(backdrop);
+root.add(dialogOverlay);
 renderer.root.add(root);
 
 const cells = createGrid(boardBox, boardSize.width, boardSize.height);
@@ -126,18 +172,38 @@ renderer.keyInput.on("keypress", (key) => {
       width: boardSize.width,
       height: boardSize.height,
     });
+    hasStarted = false;
+    state = {
+      ...state,
+      paused: true,
+    };
     updateUi(state);
     return;
   }
 
   if (key.name === "space" || key.name === "p") {
-    state = togglePause(state);
+    if (!hasStarted) {
+      hasStarted = true;
+      state = {
+        ...state,
+        paused: false,
+      };
+    } else {
+      state = togglePause(state);
+    }
     updateUi(state);
     return;
   }
 
   const direction = mapKeyToDirection(key.name, key.sequence);
   if (direction) {
+    if (!hasStarted) {
+      hasStarted = true;
+      state = {
+        ...state,
+        paused: false,
+      };
+    }
     state = queueDirection(state, direction);
   }
 });
@@ -234,12 +300,23 @@ function updatePanel(nextState: GameState) {
   let statusLine = "";
   if (nextState.gameOver) {
     statusLine = nextState.won ? "You filled the board!" : "Game Over";
+  } else if (!hasStarted) {
+    statusLine = "Ready";
   } else if (nextState.paused) {
     statusLine = "Paused";
   }
 
   statusText.content = statusLine ? `\n${statusLine}\n` : "";
   boardBox.borderColor = nextState.gameOver ? COLORS.borderAlert : COLORS.border;
+  const showDialog = nextState.gameOver || !hasStarted;
+  backdrop.visible = showDialog;
+  dialogOverlay.visible = showDialog;
+  if (!hasStarted) {
+    dialogText.content = "Welcome to Snake\n\nPress Space or an arrow key to start";
+  } else if (nextState.gameOver) {
+    const headline = nextState.won ? "You Win!" : "Game Over";
+    dialogText.content = `${headline}\n\nScore: ${nextState.score}\nPress R to restart`;
+  }
 }
 
 function updateGrid(nextState: GameState) {
