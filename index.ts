@@ -17,8 +17,10 @@ const MAX_HEIGHT = 22;
 const CELL_WIDTH = 2;
 const CELL_HEIGHT = 1;
 const PANEL_WIDTH = 28;
+const PANEL_HEIGHT = 12;
 const GAP = 2;
 const ROOT_PADDING = 1;
+const LAYOUT_BREAKPOINT = 100;
 
 const COLORS = {
   empty: "#121212",
@@ -36,9 +38,11 @@ const renderer = await createCliRenderer({
   autoFocus: true,
 });
 
+const layoutMode = getLayoutMode(renderer.terminalWidth);
 const boardSize = getBoardSize(
   renderer.terminalWidth,
   renderer.terminalHeight,
+  layoutMode,
 );
 
 let state = createInitialState({
@@ -52,33 +56,20 @@ state = {
 };
 
 const root = new BoxRenderable(renderer, {
+  id: "root",
   width: "100%",
   height: "100%",
-  flexDirection: "row",
+  flexDirection: layoutMode,
+  justifyContent: "center",
+  alignItems: "center",
   padding: ROOT_PADDING,
   gap: GAP,
   backgroundColor: COLORS.panel,
   shouldFill: true,
 });
 
-const boardBox = new BoxRenderable(renderer, {
-  width: boardSize.pixelWidth,
-  height: boardSize.pixelHeight,
-  border: true,
-  borderColor: COLORS.border,
-  flexDirection: "row",
-  flexWrap: "wrap",
-});
-
-const panelBox = new BoxRenderable(renderer, {
-  width: PANEL_WIDTH,
-  height: boardSize.pixelHeight,
-  border: true,
-  borderColor: COLORS.border,
-  flexDirection: "column",
-  padding: 1,
-  gap: 1,
-});
+let boardBox = createBoardBox(boardSize);
+const panelBox = createPanelBox(boardSize, layoutMode);
 
 const titleText = new TextRenderable(renderer, {
   content: "Snake",
@@ -147,7 +138,7 @@ root.add(backdrop);
 root.add(dialogOverlay);
 renderer.root.add(root);
 
-const cells = createGrid(boardBox, boardSize.width, boardSize.height);
+let cells = createGrid(boardBox, boardSize.width, boardSize.height);
 updateUi(state);
 
 renderer.start();
@@ -212,19 +203,35 @@ renderer.on("destroy", () => {
   clearInterval(interval);
 });
 
+process.stdout.on("resize", () => {
+  rebuildLayout();
+});
+
 process.on("SIGINT", () => shutdown());
 process.on("SIGTERM", () => shutdown());
 
 function shutdown() {
   clearInterval(interval);
   renderer.destroy();
-  process.exit(0);
 }
 
-function getBoardSize(terminalWidth: number, terminalHeight: number) {
+function getLayoutMode(terminalWidth: number): "row" | "column" {
+  return terminalWidth < LAYOUT_BREAKPOINT ? "column" : "row";
+}
+
+function getBoardSize(
+  terminalWidth: number,
+  terminalHeight: number,
+  layout: "row" | "column",
+) {
   const availableWidth =
-    terminalWidth - ROOT_PADDING * 2 - PANEL_WIDTH - GAP - 2;
-  const availableHeight = terminalHeight - ROOT_PADDING * 2 - 2;
+    layout === "row"
+      ? terminalWidth - ROOT_PADDING * 2 - PANEL_WIDTH - GAP - 2
+      : terminalWidth - ROOT_PADDING * 2 - 2;
+  const availableHeight =
+    layout === "row"
+      ? terminalHeight - ROOT_PADDING * 2 - 2
+      : terminalHeight - ROOT_PADDING * 2 - PANEL_HEIGHT - GAP - 2;
 
   const width = clamp(
     Math.floor(availableWidth / CELL_WIDTH),
@@ -237,16 +244,82 @@ function getBoardSize(terminalWidth: number, terminalHeight: number) {
     MAX_HEIGHT,
   );
 
+  const pixelWidth = width * CELL_WIDTH + 2;
+  const pixelHeight = height * CELL_HEIGHT + 2;
+
   return {
     width,
     height,
-    pixelWidth: width * CELL_WIDTH + 2,
-    pixelHeight: height * CELL_HEIGHT + 2,
+    pixelWidth,
+    pixelHeight,
+    panelHeight:
+      layout === "row"
+        ? pixelHeight
+        : Math.max(6, Math.min(PANEL_HEIGHT, terminalHeight - pixelHeight - 4)),
   };
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(value, max));
+}
+
+function createBoardBox(size: ReturnType<typeof getBoardSize>) {
+  return new BoxRenderable(renderer, {
+    id: "board",
+    width: size.pixelWidth,
+    height: size.pixelHeight,
+    border: true,
+    borderColor: COLORS.border,
+    flexDirection: "row",
+    flexWrap: "wrap",
+  });
+}
+
+function createPanelBox(
+  size: ReturnType<typeof getBoardSize>,
+  layout: "row" | "column",
+) {
+  return new BoxRenderable(renderer, {
+    id: "panel",
+    width: layout === "row" ? PANEL_WIDTH : "100%",
+    height: layout === "row" ? size.panelHeight : size.panelHeight,
+    border: true,
+    borderColor: COLORS.border,
+    flexDirection: "column",
+    padding: 1,
+    gap: 1,
+  });
+}
+
+function rebuildLayout() {
+  const nextLayout = getLayoutMode(renderer.terminalWidth);
+  const nextSize = getBoardSize(
+    renderer.terminalWidth,
+    renderer.terminalHeight,
+    nextLayout,
+  );
+
+  root.flexDirection = nextLayout;
+
+  root.remove("board");
+  boardBox.destroyRecursively();
+  boardBox = createBoardBox(nextSize);
+  root.insertBefore(boardBox, panelBox);
+
+  panelBox.width = nextLayout === "row" ? PANEL_WIDTH : "100%";
+  panelBox.height = nextLayout === "row" ? nextSize.panelHeight : nextSize.panelHeight;
+
+  cells = createGrid(boardBox, nextSize.width, nextSize.height);
+  state = createInitialState({
+    width: nextSize.width,
+    height: nextSize.height,
+  });
+  hasStarted = false;
+  state = {
+    ...state,
+    paused: true,
+  };
+  updateUi(state);
 }
 
 function createGrid(
