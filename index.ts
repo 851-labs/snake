@@ -1,4 +1,10 @@
-import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core";
+import {
+  BoxRenderable,
+  TextRenderable,
+  createCliRenderer,
+  fg,
+  t,
+} from "@opentui/core";
 import {
   createInitialState,
   queueDirection,
@@ -18,6 +24,8 @@ const CELL_WIDTH = 2;
 const CELL_HEIGHT = 1;
 const PANEL_WIDTH = 28;
 const PANEL_HEIGHT = 12;
+const CONTROLS_HEIGHT = 3;
+const APP_GAP = 0;
 const GAP = 2;
 const ROOT_PADDING = 1;
 const LAYOUT_BREAKPOINT = 100;
@@ -30,6 +38,8 @@ const COLORS = {
   panel: "#0a0a0a",
   border: "#4a4a4a",
   borderAlert: "#d17834",
+  controlsKey: "#f2f2f2",
+  controlsHint: "#8b909a",
 };
 
 const renderer = await createCliRenderer({
@@ -55,17 +65,32 @@ state = {
   paused: true,
 };
 
-const root = new BoxRenderable(renderer, {
-  id: "root",
+const app = new BoxRenderable(renderer, {
+  id: "app",
   width: "100%",
   height: "100%",
-  flexDirection: layoutMode,
+  flexDirection: "column",
   justifyContent: "center",
   alignItems: "center",
   padding: ROOT_PADDING,
-  gap: GAP,
-  backgroundColor: COLORS.panel,
+  gap: APP_GAP,
   shouldFill: true,
+});
+
+const gameGroup = new BoxRenderable(renderer, {
+  id: "group",
+  flexDirection: "column",
+  gap: APP_GAP,
+  alignItems: "center",
+});
+
+const mainArea = new BoxRenderable(renderer, {
+  id: "main",
+  width: "auto",
+  flexDirection: layoutMode,
+  justifyContent: "center",
+  alignItems: "center",
+  gap: GAP,
 });
 
 let boardBox = createBoardBox(boardSize);
@@ -83,9 +108,15 @@ const statusText = new TextRenderable(renderer, {
   content: "",
 });
 
-const helpText = new TextRenderable(renderer, {
-  content:
-    "Controls\n\nArrows / WASD  Move\nP or Space    Pause\nR             Restart\nQ             Quit",
+const controlsBar = new BoxRenderable(renderer, {
+  width: getGroupWidth(layoutMode, boardSize),
+  height: CONTROLS_HEIGHT,
+  justifyContent: "center",
+  alignItems: "center",
+});
+
+const controlsText = new TextRenderable(renderer, {
+  content: renderControls(),
 });
 
 const backdrop = new BoxRenderable(renderer, {
@@ -128,15 +159,20 @@ const dialogText = new TextRenderable(renderer, {
 panelBox.add(titleText);
 panelBox.add(scoreText);
 panelBox.add(statusText);
-panelBox.add(helpText);
 dialogBox.add(dialogText);
 dialogOverlay.add(dialogBox);
 
-root.add(boardBox);
-root.add(panelBox);
-root.add(backdrop);
-root.add(dialogOverlay);
-renderer.root.add(root);
+mainArea.add(boardBox);
+mainArea.add(panelBox);
+controlsBar.add(controlsText);
+
+gameGroup.add(mainArea);
+gameGroup.add(controlsBar);
+
+app.add(gameGroup);
+app.add(backdrop);
+app.add(dialogOverlay);
+renderer.root.add(app);
 
 let cells = createGrid(boardBox, boardSize.width, boardSize.height);
 updateUi(state);
@@ -230,8 +266,14 @@ function getBoardSize(
       : terminalWidth - ROOT_PADDING * 2 - 2;
   const availableHeight =
     layout === "row"
-      ? terminalHeight - ROOT_PADDING * 2 - 2
-      : terminalHeight - ROOT_PADDING * 2 - PANEL_HEIGHT - GAP - 2;
+      ? terminalHeight - ROOT_PADDING * 2 - CONTROLS_HEIGHT - APP_GAP - 2
+      : terminalHeight -
+        ROOT_PADDING * 2 -
+        PANEL_HEIGHT -
+        GAP -
+        CONTROLS_HEIGHT -
+        APP_GAP -
+        2;
 
   const width = clamp(
     Math.floor(availableWidth / CELL_WIDTH),
@@ -255,7 +297,19 @@ function getBoardSize(
     panelHeight:
       layout === "row"
         ? pixelHeight
-        : Math.max(6, Math.min(PANEL_HEIGHT, terminalHeight - pixelHeight - 4)),
+        : Math.max(
+            6,
+            Math.min(
+              PANEL_HEIGHT,
+              terminalHeight -
+                ROOT_PADDING * 2 -
+                CONTROLS_HEIGHT -
+                APP_GAP -
+                pixelHeight -
+                GAP -
+                2,
+            ),
+          ),
   };
 }
 
@@ -281,7 +335,7 @@ function createPanelBox(
 ) {
   return new BoxRenderable(renderer, {
     id: "panel",
-    width: layout === "row" ? PANEL_WIDTH : "100%",
+    width: layout === "row" ? PANEL_WIDTH : size.pixelWidth,
     height: layout === "row" ? size.panelHeight : size.panelHeight,
     border: true,
     borderColor: COLORS.border,
@@ -299,14 +353,15 @@ function rebuildLayout() {
     nextLayout,
   );
 
-  root.flexDirection = nextLayout;
+  mainArea.flexDirection = nextLayout;
+  controlsBar.width = getGroupWidth(nextLayout, nextSize);
 
-  root.remove("board");
+  mainArea.remove("board");
   boardBox.destroyRecursively();
   boardBox = createBoardBox(nextSize);
-  root.insertBefore(boardBox, panelBox);
+  mainArea.insertBefore(boardBox, panelBox);
 
-  panelBox.width = nextLayout === "row" ? PANEL_WIDTH : "100%";
+  panelBox.width = nextLayout === "row" ? PANEL_WIDTH : nextSize.pixelWidth;
   panelBox.height = nextLayout === "row" ? nextSize.panelHeight : nextSize.panelHeight;
 
   cells = createGrid(boardBox, nextSize.width, nextSize.height);
@@ -320,6 +375,27 @@ function rebuildLayout() {
     paused: true,
   };
   updateUi(state);
+}
+
+function renderControls() {
+  return t`${fg(COLORS.controlsKey)("Arrows/WASD")} ${fg(
+    COLORS.controlsHint,
+  )("move")}   ${fg(COLORS.controlsKey)("P/Space")} ${fg(
+    COLORS.controlsHint,
+  )("pause")}   ${fg(COLORS.controlsKey)("R")} ${fg(
+    COLORS.controlsHint,
+  )("restart")}   ${fg(COLORS.controlsKey)("Q")} ${fg(
+    COLORS.controlsHint,
+  )("quit")}`;
+}
+
+function getGroupWidth(
+  layout: "row" | "column",
+  size: ReturnType<typeof getBoardSize>,
+) {
+  return layout === "row"
+    ? size.pixelWidth + PANEL_WIDTH + GAP
+    : Math.max(size.pixelWidth, PANEL_WIDTH);
 }
 
 function createGrid(
