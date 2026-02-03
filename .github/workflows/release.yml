@@ -7,10 +7,89 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: darwin-x64
+            runs_on: macos-13
+            target: bun-darwin-x64
+            platform: darwin
+            arch: x64
+          - name: darwin-arm64
+            runs_on: macos-14
+            target: bun-darwin-arm64
+            platform: darwin
+            arch: arm64
+          - name: linux-x64
+            runs_on: ubuntu-24.04
+            target: bun-linux-x64
+            platform: linux
+            arch: x64
+          - name: linux-arm64
+            runs_on: ubuntu-24.04-arm
+            target: bun-linux-arm64
+            platform: linux
+            arch: arm64
+
+    runs-on: ${{ matrix.runs_on }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build binary
+        run: bun build --compile --minify --target ${{ matrix.target }} --outfile dist/snake src/index.ts
+
+      - name: Create tarball
+        run: |
+          tar -czf snake-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C dist snake
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: snake-${{ matrix.platform }}-${{ matrix.arch }}
+          path: snake-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Generate checksums
+        run: |
+          cd release
+          find . -maxdepth 2 -name '*.tar.gz' -print0 | xargs -0 sha256sum > SHA256SUMS
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/**/*.tar.gz
+            release/SHA256SUMS
+          generate_release_notes: true
+
+  publish:
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
       id-token: write
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -27,15 +106,6 @@ jobs:
 
       - name: Run tests
         run: bun test
-
-      - name: Build
-        run: bun run build
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/index.js
-          generate_release_notes: true
 
       - name: Publish to npm
         run: |
