@@ -16,6 +16,24 @@ OpenTUI requires Zig to build its native components. If you see build errors, in
 bun run start
 ```
 
+## Install (Bun)
+
+```bash
+bun add -g @851-labs/snake
+```
+
+Or run once with:
+
+```bash
+bunx @851-labs/snake
+```
+
+Then start:
+
+```bash
+snake
+```
+
 ## Test
 
 ```bash

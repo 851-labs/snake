@@ -1,12 +1,43 @@
 {
-  "name": "snake",
-  "module": "src/index.ts",
+  "name": "@851-labs/snake",
+  "version": "0.1.0",
+  "description": "Terminal Snake built with OpenTUI.",
+  "keywords": [
+    "cli",
+    "snake",
+    "game",
+    "terminal",
+    "tui"
+  ],
+  "author": "pondorasti",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/851-labs/snake"
+  },
   "type": "module",
-  "private": true,
+  "module": "src/index.ts",
+  "bin": {
+    "snake": "bin/snake.js"
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "bun run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --sourcemap --external:@opentui/core",
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "bun run build"
   },
   "devDependencies": {
     "@types/bun": "latest",
