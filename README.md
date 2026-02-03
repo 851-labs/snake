@@ -48,11 +48,10 @@ bun run start
 
 OpenTUI requires Zig to build its native components. If you see build errors, install Zig first.
 
-## Test
+## Tech Stack
 
-```bash
-bun test
-```
+- [OpenTUI](https://github.com/sst/opentui) - Terminal UI framework
+- [Bun](https://bun.sh) - Runtime and build tool
 
 ## License
 
