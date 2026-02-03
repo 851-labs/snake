@@ -1,6 +1,6 @@
 {
   "name": "@851-labs/snake",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Terminal Snake built with OpenTUI.",
   "keywords": [
     "cli",
