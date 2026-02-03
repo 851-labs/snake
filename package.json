@@ -17,26 +17,12 @@
   },
   "type": "module",
   "module": "src/index.ts",
-  "bin": {
-    "snake": "bin/snake.js"
-  },
-  "files": [
-    "bin",
-    "README.md",
-    "LICENSE"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=20"
-  },
+  "private": true,
   "scripts": {
     "start": "bun run src/index.ts",
     "build": "bun build --compile --minify --outfile=dist/snake src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "prepublishOnly": "bun test"
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest",
