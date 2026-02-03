@@ -1,6 +1,6 @@
 {
   "name": "@851-labs/snake",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Terminal Snake built with OpenTUI.",
   "keywords": [
     "cli",
@@ -30,11 +30,11 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.0.0"
   },
   "scripts": {
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target node --format esm --sourcemap --external:@opentui/core",
+    "build": "bun build src/index.ts --outdir dist --target bun --format esm --sourcemap --external:@opentui/core",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "prepublishOnly": "bun run build"

@@ -22,6 +22,8 @@ bun run start
 bun add -g @851-labs/snake
 ```
 
+Requires Bun to run.
+
 Or run once with:
 
 ```bash
