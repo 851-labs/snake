@@ -56,3 +56,7 @@ OpenTUI requires Zig to build its native components. If you see build errors, in
 ## License
 
 This project is released under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Support
+
+If you like this project, please consider giving it a star.
